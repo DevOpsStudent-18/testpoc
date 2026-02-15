@@ -1,0 +1,92 @@
+############################################
+# GENERAL
+############################################
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+############################################
+# ANGULAR / NODE (frontend)
+############################################
+
+# Node modules
+frontend/node_modules/
+node_modules/
+
+# Angular build output
+frontend/dist/
+dist/
+
+# Angular cache
+frontend/.angular/
+.angular/
+
+# Environment files (optional if you don't want them in repo)
+frontend/src/environments/*.local.ts
+
+# Package lock (optional — usually KEEP this)
+# package-lock.json
+
+############################################
+# .NET (backend)
+############################################
+
+# Build folders
+backend/bin/
+backend/obj/
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / VS / VS Code
+.vs/
+.idea/
+.vscode/
+
+# Publish output
+backend/publish/
+publish/
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+############################################
+# Azure
+############################################
+
+# Azure App Service artifacts
+.azure/
+.azureignore
+
+# App Service deployment logs
+*.pubxml
+*.publishsettings
+
+############################################
+# Docker (if used)
+############################################
+
+docker-compose.override.yml
+
+############################################
+# Test results
+############################################
+
+TestResults/
+coverage/
+*.coverage
