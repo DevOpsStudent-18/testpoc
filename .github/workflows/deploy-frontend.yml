@@ -1,0 +1,39 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+concurrency: 
+  group: deploy-frontend
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.FRONTEND_APP_NAME }}
+          publish-profile: ${{ secrets.FRONTEND_PUBLISH_PROFILE }}
+          package: ./frontend/dist/edf-frontend

@@ -5,7 +5,10 @@ on:
     branches: [ dev ]       
   workflow_dispatch:  # Allow manual trigger from GitHub UI
 
-
+concurrency: 
+  group: deploy-backend
+  cancel-in-progress: true
+  
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
