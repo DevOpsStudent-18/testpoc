@@ -1,8 +1,11 @@
 using EDF.Api.Repositories;
 using EDF.Api.Services;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// add EF Core context after configuration is available
 
 // Configure forwarded headers to respect proxy headers (required for many PaaS/load-balanced setups)
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -28,10 +31,35 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
+// register the device repository and optionally configure EF Core for SQL Server
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    // add context and SQL-backed repository
+    builder.Services.AddDbContext<DeviceContext>(options =>
+        options.UseSqlServer(connectionString));
+
+    builder.Services.AddScoped<IDeviceRepository, SqlDeviceRepository>();
+}
+else
+{
+    // no connection string configured; fallback to simple in‑memory store
+    builder.Services.AddSingleton<IDeviceRepository, InMemoryDeviceRepository>();
+}
+
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 
 var app = builder.Build();
+
+// if we registered a SQL context, ensure database is created/migrated
+using (var scope = app.Services.CreateScope())
+{
+    var ctx = scope.ServiceProvider.GetService<DeviceContext>();
+    if (ctx != null)
+    {
+        ctx.Database.Migrate();
+    }
+}
 
 // Use forwarded headers early in the pipeline so URL/scheme are correct behind proxies
 app.UseForwardedHeaders();
