@@ -23,21 +23,27 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
-      - name: Inject runtime backend URL
+      - name: Inject runtime config
         working-directory: frontend
         env:
           BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
+          ENTRA_TENANT_ID: ${{ secrets.ENTRA_TENANT_ID }}
+          ENTRA_UI_CLIENT_ID: ${{ secrets.ENTRA_UI_CLIENT_ID }}
+          ENTRA_API_SCOPE: ${{ secrets.ENTRA_API_SCOPE }}
         run: |
-          if [ -z "$BACKEND_API_URL" ]; then
-            echo "Missing required secret: BACKEND_API_URL"
+          if [ -z "$BACKEND_API_URL" ] || [ -z "$ENTRA_TENANT_ID" ] || [ -z "$ENTRA_UI_CLIENT_ID" ] || [ -z "$ENTRA_API_SCOPE" ]; then
+            echo "Missing one or more required secrets: BACKEND_API_URL, ENTRA_TENANT_ID, ENTRA_UI_CLIENT_ID, ENTRA_API_SCOPE"
             exit 1
           fi
 
           cat > src/assets/runtime-config.json <<EOF
           {
-            "backendUrl": "$BACKEND_API_URL"
+            "backendUrl": "$BACKEND_API_URL",
+            "tenantId": "$ENTRA_TENANT_ID",
+            "clientId": "$ENTRA_UI_CLIENT_ID",
+            "apiScope": "$ENTRA_API_SCOPE"
           }
           EOF
 

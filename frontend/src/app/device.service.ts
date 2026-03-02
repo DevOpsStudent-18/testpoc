@@ -1,17 +1,29 @@
 import { Injectable } from '@angular/core';
+import { AuthService } from './auth.service';
 import { ConfigService } from './config.service';
 
 @Injectable({ providedIn: 'root' })
 export class DeviceService {
-  private base = '';
-
-  constructor(private config: ConfigService) {
-    this.base = this.config.apiBase;
-  }
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService
+  ) {}
 
   async getAll() {
-    const res = await fetch(this.base);
-    if (!res.ok) throw new Error('Failed fetching devices');
+    const headers: Record<string, string> = {};
+    if (this.auth.isAuthenticated) {
+      const token = await this.auth.getAccessToken();
+      headers.Authorization = `Bearer ${token}`;
+    } else if (!this.config.canUseAnonymousLocal) {
+      throw new Error('Sign in is required to load devices.');
+    }
+
+    const res = await fetch(this.config.apiBase, { headers });
+
+    if (!res.ok) {
+      throw new Error(`Failed fetching devices (${res.status})`);
+    }
+
     return await res.json();
   }
 }
