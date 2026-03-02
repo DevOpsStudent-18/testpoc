@@ -3,9 +3,9 @@ name: Deploy Frontend
 on:
   push:
     branches: [ dev ]
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
 
-concurrency: 
+concurrency:
   group: deploy-frontend
   cancel-in-progress: true
 
@@ -17,19 +17,33 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18.x'
+          node-version: '20.x'
 
       - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Inject runtime backend URL
+        working-directory: frontend
+        env:
+          BACKEND_API_URL: ${{ secrets.BACKEND_API_URL }}
         run: |
-          cd frontend
-          npm ci
+          if [ -z "$BACKEND_API_URL" ]; then
+            echo "Missing required secret: BACKEND_API_URL"
+            exit 1
+          fi
+
+          cat > src/assets/runtime-config.json <<EOF
+          {
+            "backendUrl": "$BACKEND_API_URL"
+          }
+          EOF
 
       - name: Build
-        run: |
-          cd frontend
-          npm run build
+        working-directory: frontend
+        run: npm run build
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
