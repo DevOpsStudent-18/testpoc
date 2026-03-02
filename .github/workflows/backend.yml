@@ -1,0 +1,39 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore & build 
+        working-directory: backend/EDF.Api
+        run: |
+          dotnet restore
+          dotnet build --configuration Release
+
+      - name: Publish
+        working-directory: backend/EDF.Api
+        run: dotnet publish --configuration Release --output ./publish
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.BACKEND_APP_NAME }}
+          publish-profile: ${{ secrets.BACKEND_PUBLISH_PROFILE }}
+          package: ./backend/EDF.Api/publish
