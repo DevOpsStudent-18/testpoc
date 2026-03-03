@@ -2,7 +2,7 @@ name: Deploy API
 
 on:
   push:
-    branches: [ dev ]
+    branches: [ codex-dev-sso ]
   workflow_dispatch:
 
 concurrency:
