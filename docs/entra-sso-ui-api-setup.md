@@ -1,206 +1,175 @@
-# Microsoft Entra SSO Setup (Angular UI + .NET API on Azure App Service)
+# Deployment + Entra SSO Runbook (Angular UI + .NET API + Azure SQL)
 
-## Target Architecture
-- Frontend (SPA): `https://ui-kodeapp-dev.azurewebsites.net`
-- Backend API: `https://api-kodeapp-dev.azurewebsites.net`
-- Identity provider: Microsoft Entra ID
+## 1. Current Readiness Review
 
-This guide uses **2 app registrations**:
-1. `edf-ui-spa` (Angular SPA)
-2. `edf-api` (.NET API resource)
+### Ready
+1. Backend workflow deploys .NET API to App Service (`net8.0`).
+2. Frontend workflow deploys Angular app to App Service and injects runtime auth config from GitHub secrets.
+3. API is configured for Entra JWT validation and requires auth in non-Development environments.
+4. Local Development fallback exists for in-memory data and optional anonymous UI browsing.
 
----
-
-## Prerequisites
-1. You have permission in Entra ID to create app registrations.
-2. Backend is reachable at `https://api-kodeapp-dev.azurewebsites.net`.
-3. Frontend is reachable at `https://ui-kodeapp-dev.azurewebsites.net`.
-4. Decide account type:
-- Single tenant (recommended for internal org use)
-- Multi-tenant (if external organizations must sign in)
+### Important caveat
+1. Frontend local build was not re-validated in this machine session due local Node/npm state. CI uses Node 20 and is expected to build in GitHub Actions.
 
 ---
 
-## Step 1: Register Backend API App (`edf-api`)
+## 2. Target URLs and App Registrations
+
+1. Frontend URL: `https://ui-kodeapp-dev.azurewebsites.net`
+2. Backend API URL: `https://api-kodeapp-dev.azurewebsites.net`
+3. Entra app registrations:
+   1. `edf-ui-spa` (SPA client)
+   2. `edf-api` (resource API)
+
+---
+
+## 3. GitHub Repository Secrets (Required Before Deployment)
+
+Set these in GitHub repo -> `Settings` -> `Secrets and variables` -> `Actions`.
+
+### Frontend workflow secrets
+1. `FRONTEND_APP_NAME`
+2. `FRONTEND_PUBLISH_PROFILE`
+3. `BACKEND_API_URL` = `https://api-kodeapp-dev.azurewebsites.net`
+4. `ENTRA_TENANT_ID` = `<tenant-guid>`
+5. `ENTRA_UI_CLIENT_ID` = `<edf-ui-spa-client-id>`
+6. `ENTRA_API_SCOPE` = `api://<edf-api-client-id>/access_as_user`
+
+### Backend workflow secrets
+1. `BACKEND_APP_NAME`
+2. `BACKEND_PUBLISH_PROFILE`
+
+---
+
+## 4. Deploy via GitHub Actions
+
+1. Push to `dev` branch or run workflows manually.
+2. Confirm both workflows pass:
+   1. `Deploy Frontend`
+   2. `Deploy API`
+3. Open deployed endpoints:
+   1. `https://ui-kodeapp-dev.azurewebsites.net`
+   2. `https://api-kodeapp-dev.azurewebsites.net/health`
+
+---
+
+## 5. Microsoft Entra Configuration (UI Steps)
+
+## 5.1 Create/Register API App (`edf-api`)
 1. Azure Portal -> `Microsoft Entra ID` -> `App registrations` -> `New registration`.
 2. Name: `edf-api`.
-3. Supported account types: choose your required tenant model.
-4. Redirect URI: leave empty for now.
-5. Click `Register`.
-6. Copy and store:
-- `Application (client) ID` (API Client ID)
-- `Directory (tenant) ID`
+3. Save:
+   1. `Application (client) ID` (API Client ID)
+   2. `Directory (tenant) ID`
 
-### 1A. Set Application ID URI
-1. In `edf-api` app -> `Expose an API`.
-2. Click `Set` next to Application ID URI.
-3. Use default (`api://<api-client-id>`) or custom verified URI.
+## 5.2 Expose API Scope
+1. In `edf-api` -> `Expose an API`.
+2. Set Application ID URI (default `api://<edf-api-client-id>` is fine).
+3. `Add a scope`:
+   1. Name: `access_as_user`
+   2. State: `Enabled`
 4. Save.
 
-### 1B. Add API Scope
-1. In `Expose an API` -> `Add a scope`.
-2. Scope name: `access_as_user`.
-3. Who can consent: `Admins and users` (or Admins only if policy requires).
-4. Admin consent display name: `Access EDF API`.
-5. Admin consent description: `Allow the application to access EDF API on behalf of the signed-in user.`
-6. User consent display name: `Access EDF API`.
-7. User consent description: `Allow this app to call EDF API for your data.`
-8. State: `Enabled`.
-9. Click `Add scope`.
-
-### 1C. (Optional) Define App Roles
-Use app roles only if you need role-based access from token claims.
-1. `App roles` -> `Create app role`.
-2. Example role: `Api.Reader`.
-3. Allowed member types: `Users/Groups`.
-4. Save.
-
----
-
-## Step 2: Register Frontend SPA App (`edf-ui-spa`)
-1. Azure Portal -> `Microsoft Entra ID` -> `App registrations` -> `New registration`.
+## 5.3 Create/Register SPA App (`edf-ui-spa`)
+1. `Microsoft Entra ID` -> `App registrations` -> `New registration`.
 2. Name: `edf-ui-spa`.
-3. Supported account types: same model as API app.
-4. Redirect URI:
-- Platform: `Single-page application (SPA)`
-- URI: `https://ui-kodeapp-dev.azurewebsites.net`
-5. Click `Register`.
-6. Copy `Application (client) ID` (UI Client ID).
+3. Platform: `Single-page application`.
+4. Redirect URIs:
+   1. `https://ui-kodeapp-dev.azurewebsites.net`
+   2. `http://localhost:4200`
+5. Save `Application (client) ID` (UI Client ID).
 
-### 2A. Add SPA Redirect URIs (Production + Local)
-In `edf-ui-spa` -> `Authentication` -> `Single-page application`:
-1. Ensure these Redirect URIs exist:
-- `https://ui-kodeapp-dev.azurewebsites.net`
-- `http://localhost:4200`
-2. Add Logout URL:
-- `https://ui-kodeapp-dev.azurewebsites.net`
-3. Under `Implicit grant and hybrid flows`: keep unchecked unless explicitly required by your library.
-4. Save.
+## 5.4 Grant UI Permission to API
+1. In `edf-ui-spa` -> `API permissions` -> `Add permission` -> `My APIs`.
+2. Select `edf-api`.
+3. Add delegated scope `access_as_user`.
+4. Grant admin consent if tenant policy requires.
 
-### 2B. Add API Permission to Call Your Backend
-1. `API permissions` -> `Add a permission`.
-2. `My APIs` -> select `edf-api`.
-3. Choose `Delegated permissions`.
-4. Select scope: `access_as_user`.
-5. Click `Add permissions`.
-6. Click `Grant admin consent` (if your tenant requires admin pre-consent).
-
-### 2C. (Optional) Add Graph Basic Scope
-If you need profile info from Graph:
-1. `Add a permission` -> `Microsoft Graph` -> `Delegated permissions`.
-2. Add `User.Read`.
-3. Grant admin consent if required.
+## 5.5 Establish UI-API Trust
+1. In `edf-api` -> `Expose an API` -> `Authorized client applications`.
+2. Add `edf-ui-spa` client ID.
+3. Authorize scope `api://<edf-api-client-id>/access_as_user`.
 
 ---
 
-## Step 3: Establish UI-API Trust (Authorized Client App)
-This prevents consent friction and explicitly trusts UI app for API scope.
+## 6. Azure App Service Configuration (Post Deployment)
 
-1. Open `edf-api` app registration.
-2. Go to `Expose an API`.
-3. Under `Authorized client applications` -> `Add a client application`.
-4. Client ID: paste `edf-ui-spa` Client ID.
-5. Select authorized scope: `api://<edf-api-client-id>/access_as_user`.
-6. Save.
+## 6.1 Backend App Service (`api-kodeapp-dev`)
+Path: `App Service` -> `api-kodeapp-dev` -> `Environment variables` -> `App settings`
 
----
+Set:
+1. `AllowedOrigins` = `https://ui-kodeapp-dev.azurewebsites.net`
+2. `AzureAd__Instance` = `https://login.microsoftonline.com/`
+3. `AzureAd__TenantId` = `<tenant-guid>`
+4. `AzureAd__ClientId` = `<edf-api-client-id>`
+5. `AzureAd__Audience` = `api://<edf-api-client-id>`
+6. `AzureAd__Scope` = `api://<edf-api-client-id>/access_as_user`
+7. `AzureAd__SwaggerClientId` = `<client-id-for-swagger-login>` (optional)
+8. `ConnectionStrings__DefaultConnection` = `<azure-sql-connection-string>`
 
-## Step 4: Configure API App Service Settings
-In backend App Service (`api-kodeapp-dev`) -> `Environment variables` -> `App settings`, add:
+Then:
+1. Save/Apply
+2. Restart App Service
 
-- `AzureAd__Instance` = `https://login.microsoftonline.com/`
-- `AzureAd__TenantId` = `<tenant-id>`
-- `AzureAd__ClientId` = `<edf-api-client-id>`
-- `AzureAd__Audience` = `api://<edf-api-client-id>`
-
-Keep your existing:
-- `AllowedOrigins` = `https://ui-kodeapp-dev.azurewebsites.net`
-- `ConnectionStrings__DefaultConnection` = `<your sql connection string>`
-
-Save and restart backend app service.
+## 6.2 Frontend App Service (`ui-kodeapp-dev`)
+1. No mandatory runtime app settings for auth if GitHub secrets are configured correctly.
+2. Verify site loads from `https://ui-kodeapp-dev.azurewebsites.net`.
 
 ---
 
-## Step 5: Configure Frontend App Settings (Angular)
-Your Angular app should request tokens for API scope:
-- Scope: `api://<edf-api-client-id>/access_as_user`
-- Authority: `https://login.microsoftonline.com/<tenant-id>`
-- Redirect URI: `https://ui-kodeapp-dev.azurewebsites.net`
+## 7. Azure SQL Configuration
 
-If you maintain runtime config JSON, add keys such as:
-```json
-{
-  "backendUrl": "https://api-kodeapp-dev.azurewebsites.net",
-  "tenantId": "<tenant-id>",
-  "clientId": "<edf-ui-spa-client-id>",
-  "apiScope": "api://<edf-api-client-id>/access_as_user"
-}
-```
+1. Ensure database exists and table/data is present.
+2. Ensure SQL networking allows backend App Service connectivity.
+3. Ensure authentication mode used by your connection string is configured correctly (SQL login or Managed Identity).
 
 ---
 
-## Step 6: Token Validation in .NET API
-Your API must validate bearer JWTs from Entra.
+## 8. Swagger OAuth (Optional)
 
-High-level requirements in API code:
-1. Add JWT Bearer auth middleware.
-2. Validate issuer (`tenant`), audience (`api://<edf-api-client-id>`), signature, expiry.
-3. Apply `[Authorize]` on controllers/endpoints.
+Current code enables Swagger UI in Development environment.
 
-If needed, use Microsoft.Identity.Web (`AddMicrosoftIdentityWebApi`) to simplify setup.
+If you use Swagger OAuth in a non-local environment:
+1. Add redirect URI in the app used by `AzureAd__SwaggerClientId`:
+   1. `https://api-kodeapp-dev.azurewebsites.net/swagger/oauth2-redirect.html`
+2. Keep `AzureAd__SwaggerClientId` configured on backend App Service.
 
 ---
 
-## Step 7: End-to-End Validation Checklist
+## 9. End-to-End Validation
+
 1. Open UI in private browser window.
-2. Sign in using Entra account.
-3. In browser dev tools, verify access token is requested for API scope.
-4. Call API endpoint from UI.
-5. API returns `200` with data (not `401/403`).
-6. If `401`:
-- Check API audience in token
-- Check API app setting `AzureAd__Audience`
-- Check UI permission includes `access_as_user`
+2. Click `Sign in`.
+3. Complete Entra login.
+4. Confirm device list loads in UI.
+5. Confirm backend responses are `200` and not `401/403`.
+
+API quick checks:
+1. `GET https://api-kodeapp-dev.azurewebsites.net/health` should return OK.
+2. `GET https://api-kodeapp-dev.azurewebsites.net/api/devices` should return:
+   1. `401` without token in non-Development.
+   2. `200` with valid bearer token from UI.
 
 ---
 
-## Redirect URL Reference
+## 10. Troubleshooting
 
-### UI App Registration (`edf-ui-spa`)
-Add under SPA platform:
-- `https://ui-kodeapp-dev.azurewebsites.net`
-- `http://localhost:4200`
-
-### API App Registration (`edf-api`)
-Usually no redirect URI needed for pure resource API.
-If you enable Swagger OAuth login later, add web redirect URI:
-- `https://api-kodeapp-dev.azurewebsites.net/swagger/oauth2-redirect.html`
-
----
-
-## Common Mistakes
-1. Using API client ID as SPA client ID (must be separate apps).
-2. Missing `Authorized client application` in API expose settings.
-3. Wrong scope format (must be `api://<api-client-id>/access_as_user`).
-4. Not granting admin consent when tenant policy requires it.
-5. Audience mismatch between token and API validation config.
-6. Forgetting to restart App Service after changing env vars.
+1. UI loops or login fails:
+   1. Verify SPA redirect URI matches exactly.
+   2. Verify `ENTRA_UI_CLIENT_ID` and tenant in frontend runtime config.
+2. API returns `401` after login:
+   1. Verify `AzureAd__Audience` matches the token audience.
+   2. Verify UI requests `ENTRA_API_SCOPE` exactly.
+3. CORS errors:
+   1. Verify `AllowedOrigins` exactly equals frontend URL.
+4. API startup failure:
+   1. Check required app settings are present.
+   2. Check SQL connection string is valid.
 
 ---
 
-## Security Recommendations
-1. Keep API as single-tenant unless multi-tenant is required.
-2. Use app roles/groups for authorization beyond sign-in.
-3. Enforce Conditional Access and MFA in Entra.
-4. Do not use implicit flow unless required by legacy constraints.
+## 11. Local Development Notes
 
----
-
-## What to Capture for Handover
-- Tenant ID
-- UI Client ID
-- API Client ID
-- API scope URI
-- Configured redirect URIs
-- Admin consent status
-- App Service app settings keys
+1. Local API uses in-memory data when `ConnectionStrings:DefaultConnection` is empty in Development.
+2. Local frontend can allow anonymous browsing with `allowAnonymousLocal=true` and localhost host check.
+3. Azure (non-Development) still enforces authentication on API endpoints.
